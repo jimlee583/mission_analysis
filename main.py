@@ -5,6 +5,7 @@
 import math
 import numpy as np
 from scipy.optimize import minimize
+from scipy.optimize import minimize_scalar
 from scipy.constants import g
 from tabulate import tabulate
 
@@ -43,7 +44,7 @@ def rocket(dv, isp_eff):
     return math.exp(dv / (isp_eff * g))
 
 
-def objective_function(dry_mass_input, maneuvers):
+def propellant_budget(dry_mass_input, maneuvers):
     """
     Calculate a Propellant Budget given the dry mass of a satellite and a list of maneuvers.
     :param dry_mass_input: Dry mass of the satellite (typically in kg)
@@ -98,25 +99,29 @@ def objective_function(dry_mass_input, maneuvers):
     return total_mass, total_fuel, total_ox, fuel_budget, ox_budget, mass_budget
 
 
-def real_objective():
-    [total_mass, _totalFuel, _totalOx, _fuel, _ox, _mass] = objective_function(dry_mass_input, maneuver_list)
+def real_objective(dry_mass, maneuver_list):
+    [total_mass, _, _, _, _, _] = propellant_budget(dry_mass, maneuver_list)
     return -total_mass
 
 
-# Constraint functions fuel
-def constraint_fuel():
-    [_totalMass, total_fuel, _totalOx, _fuel, _ox, _mass] = objective_function(dry_mass_input, maneuver_list)
-    return 2100 - total_fuel
+def constraint_function(dry_mass):
+    [total_mass, _, _, _, _, _] = propellant_budget(dry_mass, maneuver_list)
+    return [total_mass - MAX_LV_CAPABILITY_GTO_1500]
 
 
-def constraint_ox():
-    [_a, _b, total_ox, _c, _d] = objective_function(dry_mass_input, maneuver_list)
-    return 1100 - total_ox
+def constraint_fuel(dry_mass, maneuver_list):
+    [_, total_fuel, _, _, _, _] = propellant_budget(dry_mass, maneuver_list)
+    return MAX_FUEL - total_fuel
 
 
-def constraint_wetmass():
-    [total_mass, _totalFuel, _totalOx, _fuel, _ox, _mass] = objective_function(dry_mass_input, maneuver_list)
-    return 6230 - total_mass
+def constraint_ox(dry_mass, maneuver_list):
+    [_, _, total_ox, _, _, _] = propellant_budget(dry_mass, maneuver_list)
+    return MAX_OX - total_ox
+
+
+def constraint_wetmass(dry_mass, maneuver_list):
+    [total_mass, _, _, _, _, _] = propellant_budget(dry_mass, maneuver_list)
+    return MAX_LV_CAPABILITY_GTO_1500 - total_mass
 
 
 def print_prop_budget(fuel_array, ox_array, mass_array):
@@ -146,38 +151,49 @@ if __name__ == '__main__':
     del_vel = delta_v(vel_1, vel_2, inc_init - inc_fin)
     print(f'del_vel = {del_vel:0.5f}')
 
-    dry_mass = 3324
-    pressurant = 1
+    # dry_mass = 3324
+    # pressurant = 1
+    #
+    # delV_xfer = 45
+    # delV_ewsk = 36
+    # delV_repositions = 90
+    # delV_margin = 135
+    # delV_disposal = 10
+    #
+    # # Inputs based on Isp and location of thrusters/engines
+    # Isp_eff_5lbfrea = 214
+    # Isp_eff_pt2lbfrea = 207
+    #
+    # # Inputs from somewhere
+    # residuals_fuel = 5
+    # mom_unload = 35
+    # separation_attitude = 5
+    #
+    # # Minimize the aggregated objective function with constraints
+    # maneuver_list = [['Residuals', 'add', residuals_fuel, 0, 'na'],
+    #                  ['TO Contingency', 'add', 4, 0, 'na'],
+    #                  ['Momentum', 'add', mom_unload, 0, 'na'],
+    #                  ['Disposal', 'dVmono', delV_disposal, Isp_eff_5lbfrea, 'na'],
+    #                  ['Margin', 'dVmono', delV_margin, Isp_eff_pt2lbfrea, 'na'],
+    #                  ['Repositions', 'dVmono', delV_repositions, Isp_eff_5lbfrea, 'na'],
+    #                  ['EWSK', 'dVmono', delV_ewsk, Isp_eff_pt2lbfrea, 'na'],
+    #                  ['Transfer Orbit', 'dVmono', delV_xfer, Isp_eff_5lbfrea, 'na'],
+    #                  ['Separation and Attitude Slews', 'add', separation_attitude, 0, 'na'],
+    #                  ]
+    # [wet_mass, tot_fuel, _tot_ox, fuel, ox, mass] = propellant_budget(dry_mass + pressurant, maneuver_list)
+    # print(f'Wet Mass: {wet_mass} Fuel: {tot_fuel} Separated Mass:{mass[-1]}')
+    # print_prop_budget(fuel, ox, mass)
+    #
 
-    delV_xfer = 45
-    delV_ewsk = 36
-    delV_repositions = 90
-    delV_margin = 135
-    delV_disposal = 10
-
-    # Inputs based on Isp and location of thrusters/engines
-    Isp_eff_5lbfrea = 214
-    Isp_eff_pt2lbfrea = 207
-
-    # Inputs from somewhere
-    residuals_fuel = 5
-    mom_unload = 35
-    separation_attitude = 5
-
-    # Minimize the aggregated objective function with constraints
-    maneuver_list = [['Residuals', 'add', residuals_fuel, 0, 'na'],
-                     ['TO Contingency', 'add', 4, 0, 'na'],
-                     ['Momentum', 'add', mom_unload, 0, 'na'],
-                     ['Disposal', 'dVmono', delV_disposal, Isp_eff_5lbfrea, 'na'],
-                     ['Margin', 'dVmono', delV_margin, Isp_eff_pt2lbfrea, 'na'],
-                     ['Repositions', 'dVmono', delV_repositions, Isp_eff_5lbfrea, 'na'],
-                     ['EWSK', 'dVmono', delV_ewsk, Isp_eff_pt2lbfrea, 'na'],
-                     ['Transfer Orbit', 'dVmono', delV_xfer, Isp_eff_5lbfrea, 'na'],
-                     ['Separation and Attitude Slews', 'add', separation_attitude, 0, 'na'],
-                     ]
-    [wet_mass, tot_fuel, _tot_ox, fuel, ox, mass] = objective_function(dry_mass + pressurant, maneuver_list)
-    print(f'Wet Mass: {wet_mass} Fuel: {tot_fuel} Separated Mass:{mass[-1]}')
-    print_prop_budget(fuel, ox, mass)
+    #                 ]
+    # MAX_FUEL = 1500
+    # MAX_OX = 1200
+    # MAX_LV_CAPABILITY_GTO_1500 = 6230
+    # bounds = [(500, 7500)]
+    # result = minimize(real_objective, np.array([1000]), bounds=bounds)  # This works but without any constraints
+    # print(result)
+    # result = minimize(real_objective, np.array([1000]), bounds=bounds, constraints=constraints, args=maneuver_list)
+    # #
 
 # -------------------------------
 
@@ -232,19 +248,17 @@ maneuver_list = [['Residuals', 'add', residuals_fuel, residuals_ox, 'na'],
 # Constraints
 MAX_FUEL = 2100
 MAX_OX = 1200
-MAX_LV_CAPABILITY_GTO_1500 = 6230
-constraints = [{'type': 'ineq', 'fun': constraint_fuel},
-               {'type': 'ineq', 'fun': constraint_ox},
-               {'type': 'ineq', 'fun': constraint_wetmass}
-               ]
+MAX_LV_CAPABILITY_GTO_1500 = 8000
 #
-initial_guess = np.array([2000])
-# result = minimize(real_objective, initial_guess, constraints=constraints)
-dry_mass_input = 1000
-# result = minimize(real_objective, 2000)
+guess = np.array([1000])
+constraints = [{'type': 'ineq', 'fun': constraint_fuel, 'args': (maneuver_list,)},
+               {'type': 'ineq', 'fun': constraint_ox, 'args': (maneuver_list,)},
+               {'type': 'ineq', 'fun': constraint_wetmass, 'args': (maneuver_list,)}
+               ]
+
+result = minimize(real_objective, guess,  constraints=constraints, args=maneuver_list)
 
 # --------------- Print Results -----------------
-
-[wet_mass, tot_fuel, tot_ox, fuel, ox, mass] = objective_function(3300 + pressurant, maneuver_list)
+[wet_mass, tot_fuel, tot_ox, fuel, ox, mass] = propellant_budget(result.x, maneuver_list)
 print(f'Wet Mass with PLA: {wet_mass} Separated Mass:{mass[-1]} Fuel: {tot_fuel} ox: {tot_ox}')
 print_prop_budget(fuel, ox, mass)
